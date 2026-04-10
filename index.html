@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monitor IoT PRO</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg:#0f172a;
+      --panel:#111827;
+      --line:#334155;
+      --text:#e5e7eb;
+      --muted:#94a3b8;
+      --good:#22c55e;
+      --warn:#facc15;
+      --bad:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Arial,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      padding:16px;
+    }
+    h1{
+      margin:0 0 8px;
+      text-align:center;
+      font-size:clamp(1.7rem, 4vw, 2.6rem);
+    }
+    .sub{
+      text-align:center;
+      color:var(--muted);
+      margin-bottom:18px;
+    }
+    .alert{
+      padding:12px;
+      border-radius:14px;
+      font-weight:bold;
+      margin-bottom:16px;
+      text-align:center;
+      border:1px solid var(--line);
+      background:#111827;
+    }
+    .alert.good{
+      background:rgba(34,197,94,.12);
+      border-color:rgba(34,197,94,.35);
+      color:#86efac;
+    }
+    .alert.warn{
+      background:rgba(250,204,21,.12);
+      border-color:rgba(250,204,21,.35);
+      color:#fde68a;
+    }
+    .alert.bad{
+      background:rgba(239,68,68,.12);
+      border-color:rgba(239,68,68,.35);
+      color:#fca5a5;
+    }
+    .chips{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:center;
+      margin-bottom:16px;
+    }
+    .chip{
+      background:#111827;
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding:8px 12px;
+      color:var(--muted);
+      font-size:13px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+      gap:12px;
+      margin-bottom:18px;
+    }
+    .card{
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:14px;
+      text-align:center;
+    }
+    .label{
+      color:var(--muted);
+      font-size:13px;
+      margin-bottom:8px;
+    }
+    .value{
+      font-size:24px;
+      font-weight:bold;
+      word-break:break-word;
+    }
+    .good{color:var(--good)}
+    .warn{color:var(--warn)}
+    .bad{color:var(--bad)}
+    .section{
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:14px;
+      margin-bottom:18px;
+    }
+    canvas{
+      width:100% !important;
+      height:260px !important;
+      background:#0b1220;
+      border-radius:12px;
+      padding:8px;
+    }
+    table{
+      width:100%;
+      border-collapse:collapse;
+      display:block;
+      overflow:auto;
+    }
+    th,td{
+      padding:8px;
+      border-bottom:1px solid var(--line);
+      text-align:left;
+      white-space:nowrap;
+      font-size:14px;
+    }
+    @media (max-width:600px){
+      body{padding:12px}
+      .value{font-size:20px}
+      canvas{height:220px !important}
+    }
+  </style>
+</head>
+<body>
+  <h1>Monitor IoT PRO</h1>
+  <div class="sub">Datos en vivo desde ThingSpeak</div>
+
+  <div id="alertaAire" class="alert warn">Cargando estado del aire...</div>
+
+  <div class="chips">
+    <div class="chip" id="fechaHora">--</div>
+    <div class="chip" id="estadoMov">--</div>
+    <div class="chip" id="estadoAire">--</div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">Temperatura</div>
+      <div class="value" id="temp">--</div>
+    </div>
+    <div class="card">
+      <div class="label">Humedad</div>
+      <div class="value" id="hum">--</div>
+    </div>
+    <div class="card">
+      <div class="label">Gas</div>
+      <div class="value" id="gas">--</div>
+    </div>
+    <div class="card">
+      <div class="label">Dif. Bogotá</div>
+      <div class="value" id="dif">--</div>
+    </div>
+    <div class="card">
+      <div class="label">Movimiento</div>
+      <div class="value" id="mov">--</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Temperatura</h3>
+    <canvas id="tempChart"></canvas>
+  </div>
+
+  <div class="section">
+    <h3>Humedad</h3>
+    <canvas id="humChart"></canvas>
+  </div>
+
+  <div class="section">
+    <h3>Diferencia vs Bogotá</h3>
+    <canvas id="difChart"></canvas>
+  </div>
+
+  <div class="section">
+    <h3>Últimos registros</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Hora</th>
+          <th>Temp</th>
+          <th>Hum</th>
+          <th>Gas</th>
+          <th>Dif</th>
+          <th>Movimiento</th>
+        </tr>
+      </thead>
+      <tbody id="tabla"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const channelID = TU_CHANNEL_ID; // <-- cambia esto
+    const resultados = 20;
+    const refrescoMs = 1000; // la web refresca rápido, aunque ThingSpeak actualiza más lento
+
+    const historial = [];
+
+    function crearGrafica(id, label) {
+      return new Chart(document.getElementById(id), {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label,
+            data: [],
+            borderWidth: 2,
+            tension: 0.25
+          }]
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+    }
+
+    const tempChart = crearGrafica('tempChart', 'Temperatura');
+    const humChart = crearGrafica('humChart', 'Humedad');
+    const difChart = crearGrafica('difChart', 'Diferencia Bogotá');
+
+    function estadoAire(dif) {
+      if (dif >= 20) return { texto: 'MUY LIMPIO', color: 'good' };
+      if (dif >= 5)  return { texto: 'MAS LIMPIO', color: 'good' };
+      if (dif > -5)  return { texto: 'SIMILAR A BOGOTA', color: 'warn' };
+      if (dif > -20) return { texto: 'MAS CONTAMINADO', color: 'bad' };
+      return { texto: 'MUY CONTAMINADO', color: 'bad' };
+    }
+
+    function movimientoTexto(v) {
+      return String(v) === '1' ? 'MOVIMIENTO ACTIVO' : 'SIN MOVIMIENTO';
+    }
+
+    function formatearHoraISO(iso) {
+      const d = new Date(iso);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    function cargarGraficas(feeds) {
+      const labels = feeds.map(f => formatearHoraISO(f.created_at));
+      tempChart.data.labels = labels;
+      humChart.data.labels = labels;
+      difChart.data.labels = labels;
+
+      tempChart.data.datasets[0].data = feeds.map(f => Number(f.field1));
+      humChart.data.datasets[0].data = feeds.map(f => Number(f.field2));
+      difChart.data.datasets[0].data = feeds.map(f => Number(f.field4));
+
+      tempChart.update();
+      humChart.update();
+      difChart.update();
+    }
+
+    function actualizarTabla(feeds) {
+      const tbody = document.getElementById('tabla');
+      tbody.innerHTML = '';
+
+      [...feeds].reverse().forEach(f => {
+        const dif = Number(f.field4);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${formatearHoraISO(f.created_at)}</td>
+          <td>${Number(f.field1).toFixed(1)} °C</td>
+          <td>${Number(f.field2).toFixed(1)} %</td>
+          <td>${f.field3}</td>
+          <td>${dif > 0 ? '+' : ''}${dif}%</td>
+          <td>${movimientoTexto(f.field5)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function actualizar() {
+      try {
+        const url = `https://api.thingspeak.com/channels/${channelID}/feeds.json?results=${resultados}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const feeds = data.feeds || [];
+        if (!feeds.length) return;
+
+        const last = feeds[feeds.length - 1];
+
+        const temp = Number(last.field1);
+        const hum = Number(last.field2);
+        const gas = Number(last.field3);
+        const dif = Number(last.field4);
+        const mov = movimientoTexto(last.field5);
+        const aire = estadoAire(dif);
+
+        document.getElementById('temp').textContent = temp.toFixed(1) + ' °C';
+        document.getElementById('hum').textContent = hum.toFixed(1) + ' %';
+        document.getElementById('gas').textContent = gas;
+        document.getElementById('dif').textContent = (dif > 0 ? '+' : '') + dif + ' %';
+        document.getElementById('mov').textContent = mov;
+
+        const fecha = new Date(last.created_at);
+        document.getElementById('fechaHora').textContent = fecha.toLocaleString();
+        document.getElementById('estadoMov').textContent = mov;
+        document.getElementById('estadoAire').textContent = aire.texto;
+
+        const alerta = document.getElementById('alertaAire');
+        alerta.className = 'alert ' + aire.color;
+        alerta.textContent = 'Estado del aire: ' + aire.texto;
+
+        const difEl = document.getElementById('dif');
+        difEl.className = 'value ' + aire.color;
+
+        cargarGraficas(feeds);
+        actualizarTabla(feeds);
+      } catch (e) {
+        console.error('Error cargando ThingSpeak:', e);
+      }
+    }
+
+    actualizar();
+    setInterval(actualizar, refrescoMs);
+  </script>
+</body>
+</html>
