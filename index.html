@@ -131,21 +131,136 @@
       .value{font-size:20px}
       canvas{height:220px !important}
     }
+
+
+    /* Paneles de acceso */
+    body.locked{
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      padding:16px;
+    }
+    body.locked #appContent{display:none}
+    .login-screen{
+      width:min(980px,100%);
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:16px;
+    }
+    .login-card,.admin-panel,.topbar{
+      background:rgba(17,24,39,.96);
+      border:1px solid var(--line);
+      border-radius:18px;
+      box-shadow:0 18px 40px rgba(0,0,0,.28);
+    }
+    .login-card{padding:20px}
+    .login-card h2{margin:0 0 8px}
+    .login-card p{color:var(--muted);line-height:1.5}
+    .input{
+      width:100%;
+      padding:12px;
+      margin:8px 0;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:#0b1220;
+      color:var(--text);
+      outline:none;
+    }
+    .btn{
+      border:1px solid var(--line);
+      background:#1f2937;
+      color:var(--text);
+      padding:11px 14px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:bold;
+      transition:.2s ease;
+    }
+    .btn:hover{transform:translateY(-1px);border-color:#64748b}
+    .btn.primary{background:linear-gradient(135deg,#2563eb,#22c55e);border-color:transparent;color:white}
+    .btn.danger{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.35);color:#fca5a5}
+    .login-msg{min-height:22px;color:#fca5a5;font-weight:bold;margin-top:8px}
+    .topbar{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      padding:10px 12px;
+      margin-bottom:14px;
+      position:sticky;
+      top:0;
+      z-index:20;
+      backdrop-filter:blur(12px);
+    }
+    .mode-pill{color:var(--muted);font-size:14px}
+    .admin-panel{padding:14px;margin-bottom:18px}
+    .admin-panel h3{margin:0 0 8px}
+    .admin-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+      gap:10px;
+      margin:12px 0;
+    }
+    .check-card{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:10px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      color:var(--muted);
+      background:#0b1220;
+    }
+    .check-card input{transform:scale(1.15)}
+    [data-user-section].hidden-for-user{display:none!important}
+    @media(max-width:720px){.login-screen{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:stretch}}
+
   </style>
 </head>
-<body>
+<body class="locked">
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <h2>Panel administrador</h2>
+      <p>Acceso privado para configurar qué información puede ver el usuario invitado.</p>
+      <input id="adminUser" class="input" placeholder="Usuario" autocomplete="username">
+      <input id="adminPass" class="input" placeholder="Contraseña" type="password" autocomplete="current-password">
+      <button class="btn primary" id="adminLoginBtn">Entrar como administrador</button>
+      <div id="loginMsg" class="login-msg"></div>
+    </div>
+    <div class="login-card">
+      <h2>Usuario</h2>
+      <p>Entra como invitado sin crear cuenta. Solo verás la información habilitada por el administrador.</p>
+      <button class="btn" id="guestLoginBtn">Entrar como usuario</button>
+    </div>
+  </div>
+
+  <div id="appContent">
+    <div class="topbar">
+      <div><strong>Monitor IoT PRO</strong> <span id="modeText" class="mode-pill"></span></div>
+      <button class="btn danger" id="logoutBtn">Salir</button>
+    </div>
+
+    <div id="adminPanel" class="admin-panel" style="display:none">
+      <h3>Panel administrador</h3>
+      <p class="sub" style="text-align:left;margin-bottom:8px">Marca lo que el usuario invitado puede ver. El administrador siempre ve todo.</p>
+      <div class="admin-grid" id="permissionControls"></div>
+      <button class="btn primary" id="savePermsBtn">Guardar permisos del usuario</button>
+      <button class="btn" id="selectAllBtn">Seleccionar todo</button>
+      <button class="btn" id="clearAllBtn">Ocultar todo</button>
+      <div class="chip" id="saveStatus" style="display:inline-block;margin-left:8px">Sin cambios</div>
+    </div>
   <h1>Monitor IoT PRO</h1>
   <div class="sub">Datos en vivo desde ThingSpeak</div>
 
-  <div id="alertaAire" class="alert warn">Cargando estado del aire...</div>
+  <div id="alertaAire" class="alert warn" data-user-section="alerta">Cargando estado del aire...</div>
 
-  <div class="chips">
+  <div class="chips" data-user-section="estado">
     <div class="chip" id="fechaHora">--</div>
     <div class="chip" id="estadoMov">--</div>
     <div class="chip" id="estadoAire">--</div>
   </div>
 
-  <div class="grid">
+  <div class="grid" data-user-section="tarjetas">
     <div class="card">
       <div class="label">Temperatura</div>
       <div class="value" id="temp">--</div>
@@ -168,22 +283,22 @@
     </div>
   </div>
 
-  <div class="section">
+  <div class="section" data-user-section="graficaTemp">
     <h3>Temperatura</h3>
     <canvas id="tempChart"></canvas>
   </div>
 
-  <div class="section">
+  <div class="section" data-user-section="graficaHum">
     <h3>Humedad</h3>
     <canvas id="humChart"></canvas>
   </div>
 
-  <div class="section">
+  <div class="section" data-user-section="graficaDif">
     <h3>Diferencia vs Bogotá</h3>
     <canvas id="difChart"></canvas>
   </div>
 
-  <div class="section">
+  <div class="section" data-user-section="tabla">
     <h3>Últimos registros</h3>
     <table>
       <thead>
@@ -201,6 +316,82 @@
   </div>
 
   <script>
+
+    const ADMIN_USER = 'LCK';
+    const ADMIN_PASS = 'Laura527@%';
+    const PERMISSIONS_KEY = 'iotUserPermissionsV1';
+    const sectionLabels = {
+      alerta: 'Alerta del aire',
+      estado: 'Chips de fecha, movimiento y aire',
+      tarjetas: 'Tarjetas principales de datos',
+      graficaTemp: 'Gráfica de temperatura',
+      graficaHum: 'Gráfica de humedad',
+      graficaDif: 'Gráfica diferencia vs Bogotá',
+      tabla: 'Tabla de últimos registros'
+    };
+    const defaultPermissions = {
+      alerta: true,
+      estado: true,
+      tarjetas: true,
+      graficaTemp: true,
+      graficaHum: true,
+      graficaDif: true,
+      tabla: true
+    };
+    let currentRole = null;
+
+    function getPermissions(){
+      try { return { ...defaultPermissions, ...(JSON.parse(localStorage.getItem(PERMISSIONS_KEY)) || {}) }; }
+      catch(e){ return { ...defaultPermissions }; }
+    }
+    function savePermissions(perms){ localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(perms)); }
+    function applyPermissions(){
+      const perms = getPermissions();
+      document.querySelectorAll('[data-user-section]').forEach(el => {
+        const key = el.dataset.userSection;
+        el.classList.toggle('hidden-for-user', currentRole === 'guest' && !perms[key]);
+      });
+    }
+    function buildPermissionControls(){
+      const box = document.getElementById('permissionControls');
+      const perms = getPermissions();
+      box.innerHTML = '';
+      Object.keys(sectionLabels).forEach(key => {
+        const label = document.createElement('label');
+        label.className = 'check-card';
+        label.innerHTML = `<input type="checkbox" data-perm="${key}" ${perms[key] ? 'checked' : ''}> <span>${sectionLabels[key]}</span>`;
+        box.appendChild(label);
+      });
+    }
+    function enter(role){
+      currentRole = role;
+      document.body.classList.remove('locked');
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appContent').style.display = 'block';
+      document.getElementById('adminPanel').style.display = role === 'admin' ? 'block' : 'none';
+      document.getElementById('modeText').textContent = role === 'admin' ? '· Administrador' : '· Usuario invitado';
+      if(role === 'admin') buildPermissionControls();
+      applyPermissions();
+      setTimeout(() => { tempChart.resize(); humChart.resize(); difChart.resize(); }, 80);
+    }
+    document.getElementById('adminLoginBtn').addEventListener('click', () => {
+      const u = document.getElementById('adminUser').value.trim();
+      const p = document.getElementById('adminPass').value;
+      if(u === ADMIN_USER && p === ADMIN_PASS) enter('admin');
+      else document.getElementById('loginMsg').textContent = 'Usuario o contraseña incorrectos.';
+    });
+    document.getElementById('guestLoginBtn').addEventListener('click', () => enter('guest'));
+    document.getElementById('logoutBtn').addEventListener('click', () => location.reload());
+    document.getElementById('savePermsBtn').addEventListener('click', () => {
+      const perms = {};
+      document.querySelectorAll('[data-perm]').forEach(chk => perms[chk.dataset.perm] = chk.checked);
+      savePermissions(perms);
+      document.getElementById('saveStatus').textContent = 'Permisos guardados';
+      applyPermissions();
+    });
+    document.getElementById('selectAllBtn').addEventListener('click', () => document.querySelectorAll('[data-perm]').forEach(chk => chk.checked = true));
+    document.getElementById('clearAllBtn').addEventListener('click', () => document.querySelectorAll('[data-perm]').forEach(chk => chk.checked = false));
+
     const channelID = 3334911; // <-- cambia esto
     const resultados = 20;
     const refrescoMs = 1000; // la web refresca rápido, aunque ThingSpeak actualiza más lento
@@ -327,5 +518,6 @@
     actualizar();
     setInterval(actualizar, refrescoMs);
   </script>
+  </div>
 </body>
 </html>
